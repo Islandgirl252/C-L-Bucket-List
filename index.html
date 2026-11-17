@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bucket List" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Local Bucket List Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8fafc;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="text-slate-800 pb-24">
+
+  <!-- Top Header -->
+  <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <div class="bg-amber-500 text-slate-950 p-2 rounded-xl shadow-inner">
+          <i data-lucide="compass" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-base sm:text-lg leading-tight tracking-tight">Local Bucket List</h1>
+          <div id="sync-status-badge" class="flex items-center gap-1.5 text-[11px] text-slate-300">
+            <span class="w-2 h-2 rounded-full bg-slate-400" id="sync-dot"></span>
+            <span id="sync-label">Local Mode (Not Shared)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="openNearbyModal()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 transition shadow-sm">
+          <i data-lucide="radar" class="w-4 h-4"></i>
+          <span>Near Me</span>
+        </button>
+        <button onclick="openShareModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 transition shadow-sm">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          <span>Share</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-5xl mx-auto px-4 pt-5 space-y-5">
+
+    <!-- Progress Card -->
+    <section class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Adventure Progress</p>
+        <div class="flex items-baseline gap-2 mt-0.5">
+          <span id="visited-count" class="text-2xl sm:text-3xl font-extrabold text-slate-900">0</span>
+          <span class="text-sm text-slate-500 font-medium">of <span id="total-count">0</span> places checked off</span>
+        </div>
+      </div>
+      <div class="w-full sm:w-64">
+        <div class="flex justify-between text-xs font-semibold text-slate-500 mb-1.5">
+          <span>Completion</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+          <div id="progress-bar" class="bg-gradient-to-r from-amber-500 to-emerald-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Search & Action Row -->
+    <section class="flex flex-col sm:flex-row gap-2.5">
+      <div class="relative flex-1">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+        <input id="search-input" type="text" placeholder="Search spots, cities, or notes..." oninput="renderPlaces()"
+          class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500" />
+      </div>
+      <div class="flex gap-2">
+        <select id="status-filter" onchange="renderPlaces()" class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 focus:outline-none">
+          <option value="all">All Status</option>
+          <option value="todo">To Visit</option>
+          <option value="visited">Visited</option>
+        </select>
+        <button onclick="openAddModal()" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition shrink-0">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Add Spot</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Category Filter Pills -->
+    <section class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+      <button onclick="setCategory('all')" data-cat="all" class="cat-pill active-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-slate-900 text-white">All Spots</button>
+      <button onclick="setCategory('brewery')" data-cat="brewery" class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">🍺 Breweries</button>
+      <button onclick="setCategory('winery')" data-cat="winery" class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">🍷 Wineries</button>
+      <button onclick="setCategory('museum')" data-cat="museum" class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">🏛️ Museums</button>
+      <button onclick="setCategory('park')" data-cat="park" class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">🌲 Natural Parks</button>
+    </section>
+
+    <!-- Places Grid -->
+    <section id="places-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></section>
+
+  </main>
+
+  <!-- SHARE / CLOUD SYNC MODAL -->
+  <div id="share-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="bg-indigo-100 text-indigo-600 p-2 rounded-xl">
+            <i data-lucide="cloud" class="w-5 h-5"></i>
+          </div>
+          <h2 class="font-extrabold text-lg text-slate-900">Live Sync & Couple Share</h2>
+        </div>
+        <button onclick="closeModal('share-modal')" class="text-slate-400 hover:text-slate-600 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <p class="text-xs text-slate-500 leading-relaxed">
+        Enter a shared <strong>Couple Code</strong> below. Anyone using the same code or share link on iPhone or Android will see live updates whenever a spot is added or checked off!
+      </p>
+      <div class="space-y-2">
+        <label class="text-xs font-bold text-slate-700">Shared List Code</label>
+        <div class="flex gap-2">
+          <input id="couple-code-input" type="text" placeholder="e.g. alex-and-sam-2026"
+            class="flex-1 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <button onclick="generateRandomCode()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 rounded-xl">New</button>
+        </div>
+      </div>
+      <button onclick="connectSyncCode()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm py-2.5 rounded-xl transition">
+        Connect & Sync List
+      </button>
+
+      <div id="share-link-box" class="hidden pt-3 border-t border-slate-100 space-y-2">
+        <label class="text-xs font-bold text-slate-700">Direct Share Link (Text this to your partner)</label>
+        <div class="flex gap-2">
+          <input id="share-url-input" type="text" readonly class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600" />
+          <button onclick="copyShareLink()" class="bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl hover:bg-slate-800">Copy Link</button>
+        </div>
+        <p id="copy-feedback" class="text-[11px] text-emerald-600 font-semibold hidden">Copied to clipboard! Ready to paste in a text message.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DISCOVER NEARBY MODAL -->
+  <div id="nearby-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="bg-emerald-100 text-emerald-700 p-2 rounded-xl">
+            <i data-lucide="radar" class="w-5 h-5"></i>
+          </div>
+          <h2 class="font-extrabold text-lg text-slate-900">Find Places Near Me</h2>
+        </div>
+        <button onclick="closeModal('nearby-modal')" class="text-slate-400 hover:text-slate-600 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-3 shrink-0">
+        <div class="grid grid-cols-2 gap-2">
+          <select id="nearby-category" class="border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium">
+            <option value="brewery">🍺 Breweries</option>
+            <option value="winery">🍷 Wineries</option>
+            <option value="museum">🏛️ Museums</option>
+            <option value="park">🌲 Natural Parks</option>
+          </select>
+          <select id="nearby-radius" class="border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium">
+            <option value="8000">Within 5 miles</option>
+            <option value="24000" selected>Within 15 miles</option>
+            <option value="48000">Within 30 miles</option>
+          </select>
+        </div>
+
+        <button onclick="searchByGPS()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 transition">
+          <i data-lucide="navigation" class="w-4 h-4"></i>
+          <span>Use My Current GPS Location</span>
+        </button>
+
+        <div class="flex gap-2">
+          <input id="nearby-city-input" type="text" placeholder="Or enter a city / zip (e.g. Charlottesville, VA)"
+            class="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <button onclick="searchByCity()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 rounded-xl">Search</button>
+        </div>
+      </div>
+
+      <div id="nearby-status" class="text-xs text-slate-500 font-medium hidden"></div>
+      <div id="nearby-results" class="overflow-y-auto space-y-2.5 pr-1 flex-1"></div>
+    </div>
+  </div>
+
+  <!-- ADD / EDIT SPOT MODAL -->
+  <div id="add-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-extrabold text-lg text-slate-900">Add New Spot</h2>
+        <button onclick="closeModal('add-modal')" class="text-slate-400 hover:text-slate-600 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-slate-700">Place Name</label>
+          <input id="new-name" type="text" placeholder="e.g. Blue Mountain Brewery" class="w-full mt-1 border border-slate-200 rounded-xl px-3.5 py-2 text-sm" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-bold text-slate-700">Category</label>
+            <select id="new-category" class="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+              <option value="brewery">🍺 Brewery</option>
+              <option value="winery">🍷 Winery</option>
+              <option value="museum">🏛️ Museum</option>
+              <option value="park">🌲 Natural Park</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-700">City / Area</label>
+            <input id="new-location" type="text" placeholder="e.g. Richmond, VA" class="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-700">Notes / Must-Try</label>
+          <textarea id="new-notes" rows="2" placeholder="Try the sour flights or hike the lakeside trail..." class="w-full mt-1 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"></textarea>
+        </div>
+      </div>
+      <button onclick="saveNewSpot()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm py-2.5 rounded-xl transition">
+        Add to Bucket List
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Default starter places
+    const DEFAULT_PLACES = [
+      { id: '1', name: 'Hardywood Park Craft Brewery', category: 'brewery', location: 'Richmond / West Creek, VA', notes: 'Great outdoor turf & seasonal stouts.', visited: false, rating: 0 },
+      { id: '2', name: 'Triple Crossing Beer', category: 'brewery', location: 'Midlothian / Fulton, VA', notes: 'Known for hazy IPAs and wood-fired pizza.', visited: false, rating: 0 },
+      { id: '3', name: 'James River Cellars Winery', category: 'winery', location: 'Glen Allen, VA', notes: 'Tuscan-style patio and weekend live music.', visited: false, rating: 0 },
+      { id: '4', name: 'Ashton Creek Vineyard', category: 'winery', location: 'Chester, VA', notes: 'Rustic-chic barn tasting room & flatbreads.', visited: false, rating: 0 },
+      { id: '5', name: 'Virginia Museum of Fine Arts', category: 'museum', location: 'Richmond, VA', notes: 'Free admission, sculpture garden & Fabergé collection.', visited: false, rating: 0 },
+      { id: '6', name: 'Science Museum of Virginia', category: 'museum', location: 'Richmond, VA', notes: 'Dome planetarium inside historic train station.', visited: false, rating: 0 },
+      { id: '7', name: 'Pocahontas State Park', category: 'park', location: 'Chesterfield, VA', notes: '8,000 acres of trails, lakes, and kayaking.', visited: false, rating: 0 },
+      { id: '8', name: 'Shenandoah National Park', category: 'park', location: 'Blue Ridge Mountains, VA', notes: 'Skyline Drive overlooks and waterfall hikes.', visited: false, rating: 0 }
+    ];
+
+    let places = [];
+    let currentCategory = 'all';
+    let syncCode = '';
+    let syncInterval = null;
+    let lastSyncedHash = '';
+
+    // Cloud Sync Backend (npoint.io public JSON bin per couple code via deterministic key hashing / jsonblob fallback)
+    // Uses localStorage + free KV sync endpoint so zero API keys are required
+    const KV_API = 'https://kvdb.io/A9xBucketListSync2026/';
+
+    function initApp() {
+      const params = new URLSearchParams(window.location.search);
+      const urlList = params.get('list');
+      const savedCode = localStorage.getItem('bucket_sync_code');
+
+      const localData = localStorage.getItem('bucket_places_v1');
+      places = localData ? JSON.parse(localData) : [...DEFAULT_PLACES];
+
+      if (urlList) {
+        syncCode = sanitizeCode(urlList);
+        localStorage.setItem('bucket_sync_code', syncCode);
+      } else if (savedCode) {
+        syncCode = sanitizeCode(savedCode);
+      }
+
+      if (syncCode) {
+        startCloudSync(syncCode, true);
+      } else {
+        saveLocal();
+        renderPlaces();
+      }
+      lucide.createIcons();
+    }
+
+    function sanitizeCode(str) {
+      return str.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    }
+
+    function saveLocal() {
+      localStorage.setItem('bucket_places_v1', JSON.stringify(places));
+    }
+
+    async function pushToCloud() {
+      saveLocal();
+      if (!syncCode) return;
+      try {
+        const payload = JSON.stringify({ updatedAt: Date.now(), places });
+        lastSyncedHash = JSON.stringify(places);
+        await fetch(KV_API + encodeURIComponent(syncCode), {
+          method: 'POST',
+          body: payload
+        });
+        updateSyncUI(true, `Synced: ${syncCode}`);
+      } catch (e) {
+        updateSyncUI(false, `Offline (Saved Locally)`);
+      }
+    }
+
+    async function pullFromCloud(isInitial = false) {
+      if (!syncCode) return;
+      try {
+        const res = await fetch(KV_API + encodeURIComponent(syncCode) + '?t=' + Date.now());
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.places)) {
+            const incomingHash = JSON.stringify(data.places);
+            if (incomingHash !== lastSyncedHash) {
+              places = data.places;
+              lastSyncedHash = incomingHash;
+              saveLocal();
+              renderPlaces();
+            }
+            updateSyncUI(true, `Live Sync: ${syncCode}`);
+            return;
+          }
+        } else if (res.status === 404 && isInitial) {
+          // First time creating this list code in the cloud
+          await pushToCloud();
+        }
+      } catch (e) {
+        updateSyncUI(false, `Syncing paused (Offline)`);
+      }
+    }
+
+    function startCloudSync(code, isInitial = false) {
+      syncCode = sanitizeCode(code);
+      localStorage.setItem('bucket_sync_code', syncCode);
+      updateSyncUI(true, `Connecting: ${syncCode}...`);
+      pullFromCloud(isInitial);
+      if (syncInterval) clearInterval(syncInterval);
+      syncInterval = setInterval(() => pullFromCloud(false), 5000);
+    }
+
+    function updateSyncUI(connected, labelText) {
+      const dot = document.getElementById('sync-dot');
+      const label = document.getElementById('sync-label');
+      dot.className = connected ? 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse' : 'w-2 h-2 rounded-full bg-amber-400';
+      label.textContent = labelText;
+    }
+
+    function openShareModal() {
+      const modal = document.getElementById('share-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      if (syncCode) {
+        document.getElementById('couple-code-input').value = syncCode;
+        showShareUrl(syncCode);
+      }
+    }
+
+    function generateRandomCode() {
+      const words = ['sunset', 'trail', 'hops', 'vino', 'wander', 'peak', 'spark', 'compass'];
+      const w1 = words[Math.floor(Math.random() * words.length)];
+      const w2 = words[Math.floor(Math.random() * words.length)];
+      const num = Math.floor(100 + Math.random() * 900);
+      document.getElementById('couple-code-input').value = `${w1}-${w2}-${num}`;
+    }
+
+    function connectSyncCode() {
+      const raw = document.getElementById('couple-code-input').value;
+      if (!raw.trim()) return;
+      const clean = sanitizeCode(raw);
+      startCloudSync(clean, true);
+      showShareUrl(clean);
+      const url = new URL(window.location.href);
+      url.searchParams.set('list', clean);
+      window.history.replaceState({}, '', url);
+    }
+
+    function showShareUrl(code) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('list', code);
+      document.getElementById('share-url-input').value = url.toString();
+      document.getElementById('share-link-box').classList.remove('hidden');
+    }
+
+    function copyShareLink() {
+      const input = document.getElementById('share-url-input');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      const fb = document.getElementById('copy-feedback');
+      fb.classList.remove('hidden');
+      setTimeout(() => fb.classList.add('hidden'), 3500);
+    }
+
+    function setCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.className = 'cat-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-slate-900 text-white';
+        } else {
+          btn.className = 'cat-pill px-3.5 py-1.5 rounded-full text-xs font-bold transition shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50';
+        }
+      });
+      renderPlaces();
+    }
+
+    function toggleVisited(id) {
+      const idx = places.findIndex(p => p.id === id);
+      if (idx > -1) {
+        places[idx].visited = !places[idx].visited;
+        renderPlaces();
+        pushToCloud();
+      }
+    }
+
+    function deletePlace(id) {
+      places = places.filter(p => p.id !== id);
+      renderPlaces();
+      pushToCloud();
+    }
+
+    function getCategoryBadge(cat) {
+      const map = {
+        brewery: { label: '🍺 Brewery', cls: 'bg-amber-100 text-amber-800' },
+        winery: { label: '🍷 Winery', cls: 'bg-rose-100 text-rose-800' },
+        museum: { label: '🏛️ Museum', cls: 'bg-sky-100 text-sky-800' },
+        park: { label: '🌲 Natural Park', cls: 'bg-emerald-100 text-emerald-800' }
+      };
+      return map[cat] || { label: cat, cls: 'bg-slate-100 text-slate-700' };
+    }
+
+    function renderPlaces() {
+      const grid = document.getElementById('places-grid');
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const status = document.getElementById('status-filter').value;
+
+      const visitedTotal = places.filter(p => p.visited).length;
+      document.getElementById('visited-count').textContent = visitedTotal;
+      document.getElementById('total-count').textContent = places.length;
+      const pct = places.length ? Math.round((visitedTotal / places.length) * 100) : 0;
+      document.getElementById('progress-percent').textContent = pct + '%';
+      document.getElementById('progress-bar').style.width = pct + '%';
+
+      const filtered = places.filter(p => {
+        const matchCat = currentCategory === 'all' || p.category === currentCategory;
+        const matchStatus = status === 'all' || (status === 'visited' && p.visited) || (status === 'todo' && !p.visited);
+        const matchText = !query || p.name.toLowerCase().includes(query) || (p.location && p.location.toLowerCase().includes(query)) || (p.notes && p.notes.toLowerCase().includes(query));
+        return matchCat && matchStatus && matchText;
+      });
+
+      if (!filtered.length) {
+        grid.innerHTML = `<div class="col-span-full bg-white rounded-2xl p-8 text-center border border-dashed border-slate-300 text-slate-500 text-sm">No places match your filter. Try tapping <strong>Near Me</strong> or <strong>Add Spot</strong>!</div>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(p => {
+        const badge = getCategoryBadge(p.category);
+        return `
+          <div class="bg-white rounded-2xl p-4 border ${p.visited ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200/80'} shadow-sm flex flex-col justify-between gap-3 transition">
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-1">
+                <span class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full ${badge.cls}">${badge.label}</span>
+                <h3 class="font-bold text-base text-slate-900 ${p.visited ? 'line-through text-slate-400' : ''}">${escapeHtml(p.name)}</h3>
+                <p class="text-xs text-slate-500 flex items-center gap-1">
+                  <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                  <span>${escapeHtml(p.location || 'Local Area')}</span>
+                </p>
+              </div>
+              <button onclick="toggleVisited('${p.id}')" title="Toggle Visited"
+                class="w-9 h-9 rounded-xl flex items-center justify-center border transition shrink-0 ${p.visited ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-600'}">
+                <i data-lucide="check" class="w-5 h-5"></i>
+              </button>
+            </div>
+            ${p.notes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">${escapeHtml(p.notes)}</p>` : ''}
+            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + (p.location || ''))}" target="_blank"
+                class="text-indigo-600 hover:text-indigo-500 font-semibold flex items-center gap-1">
+                <span>Open in Maps</span>
+                <i data-lucide="external-link" class="w-3 h-3"></i>
+              </a>
+              <button onclick="deletePlace('${p.id}')" class="text-slate-400 hover:text-rose-500 font-medium">Remove</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+    }
+
+    // Add Spot Modal
+    function openAddModal() {
+      const m = document.getElementById('add-modal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function saveNewSpot() {
+      const name = document.getElementById('new-name').value.trim();
+      if (!name) return;
+      const category = document.getElementById('new-category').value;
+      const location = document.getElementById('new-location').value.trim();
+      const notes = document.getElementById('new-notes').value.trim();
+
+      places.unshift({
+        id: 'spot-' + Date.now(),
+        name,
+        category,
+        location,
+        notes,
+        visited: false,
+        rating: 0
+      });
+
+      document.getElementById('new-name').value = '';
+      document.getElementById('new-location').value = '';
+      document.getElementById('new-notes').value = '';
+      closeModal('add-modal');
+      renderPlaces();
+      pushToCloud();
+    }
+
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    // Nearby Discovery via OpenStreetMap Overpass API + Nominatim
+    function openNearbyModal() {
+      const m = document.getElementById('nearby-modal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function searchByGPS() {
+      const statusEl = document.getElementById('nearby-status');
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = 'Requesting your GPS location...';
+      if (!navigator.geolocation) {
+        statusEl.textContent = 'GPS is not supported on this browser. Try searching by city!';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos => fetchNearbyOSM(pos.coords.latitude, pos.coords.longitude),
+        () => { statusEl.textContent = 'Location permission denied. Enter a city or zip code below instead.'; }
+      );
+    }
+
+    async function searchByCity() {
+      const city = document.getElementById('nearby-city-input').value.trim();
+      if (!city) return;
+      const statusEl = document.getElementById('nearby-status');
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = `Finding coordinates for "${city}"...`;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1`);
+        const data = await res.json();
+        if (!data.length) {
+          statusEl.textContent = 'City not found. Try adding state or country (e.g., Richmond, VA).';
+          return;
+        }
+        fetchNearbyOSM(parseFloat(data[0].lat), parseFloat(data[0].lon));
+      } catch (e) {
+        statusEl.textContent = 'Error looking up city. Please try again.';
+      }
+    }
+
+    async function fetchNearbyOSM(lat, lon) {
+      const cat = document.getElementById('nearby-category').value;
+      const radius = document.getElementById('nearby-radius').value;
+      const statusEl = document.getElementById('nearby-status');
+      const resultsEl = document.getElementById('nearby-results');
+      statusEl.textContent = 'Scanning nearby spots...';
+      resultsEl.innerHTML = '';
+
+      const tagQueries = {
+        brewery: `nwr["craft"="brewery"](around:${radius},${lat},${lon});nwr["amenity"="pub"]["brewery"](around:${radius},${lat},${lon});`,
+        winery: `nwr["craft"="winery"](around:${radius},${lat},${lon});nwr["landuse"="vineyard"](around:${radius},${lat},${lon});`,
+        museum: `nwr["tourism"="museum"](around:${radius},${lat},${lon});`,
+        park: `nwr["leisure"="nature_reserve"](around:${radius},${lat},${lon});nwr["boundary"="national_park"](around:${radius},${lat},${lon});nwr["leisure"="park"]["name"](around:${radius},${lat},${lon});`
+      };
+
+      const query = `[out:json][timeout:20];(${tagQueries[cat]});out center 25;`;
+
+      try {
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: 'data=' + encodeURIComponent(query)
+        });
+        const data = await res.json();
+        const items = (data.elements || []).filter(el => el.tags && el.tags.name);
+
+        if (!items.length) {
+          statusEl.textContent = 'No places found in that radius. Try widening to 30 miles!';
+          return;
+        }
+
+        statusEl.textContent = `Found ${items.length} nearby places:`;
+        resultsEl.innerHTML = items.map((el, idx) => {
+          const name = el.tags.name;
+          const city = el.tags['addr:city'] || el.tags['addr:street'] || 'Nearby';
+          const alreadyAdded = places.some(p => p.name.toLowerCase() === name.toLowerCase());
+          return `
+            <div class="p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-2 bg-slate-50">
+              <div>
+                <p class="font-bold text-sm text-slate-900">${escapeHtml(name)}</p>
+                <p class="text-xs text-slate-500">${escapeHtml(city)}</p>
+              </div>
+              <button id="add-near-${idx}" ${alreadyAdded ? 'disabled' : ''}
+                onclick="addNearbyPlace('${escapeHtml(name).replace(/'/g, "\'")}', '${cat}', '${escapeHtml(city).replace(/'/g, "\'")}', 'add-near-${idx}')"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 ${alreadyAdded ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-900 text-white hover:bg-slate-800'}">
+                ${alreadyAdded ? 'Added ✓' : '+ Add'}
+              </button>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        statusEl.textContent = 'Search timed out. Try a smaller radius or try again in a moment.';
+      }
+    }
+
+    function addNearbyPlace(name, category, location, btnId) {
+      places.unshift({
+        id: 'osm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        name,
+        category,
+        location,
+        notes: 'Discovered via Near Me search',
+        visited: false,
+        rating: 0
+      });
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Added ✓';
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 bg-emerald-100 text-emerald-700';
+      }
+      renderPlaces();
+      pushToCloud();
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
